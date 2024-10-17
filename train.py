@@ -16,7 +16,6 @@ import torch.distributed as dist
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import ProjectConfiguration, set_seed
-from peft import LoraConfig, get_peft_model, get_peft_model_state_dict
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, CLIPTextModel, PretrainedConfig
 from diffusers import (
@@ -29,8 +28,8 @@ from diffusers import (
 from diffusers.optimization import get_scheduler
 from pathlib import Path
 
-from src.utils import recover_resume_step, get_module_kohya_state_dict_2, encode_prompt
-from src.lcm import guidance_scale_embedding, append_dims, predicted_origin, extract_into_tensor, DDIMSolver, update_ema
+from utils import encode_prompt
+from solver import DDIMSolver
 from src.eval import log_validation, distributed_sampling, calculate_scores
 from train_utils import multiboundary_cd_loss, cd_loss
 from dataset import get_coco_loader
@@ -123,16 +122,15 @@ def train(args):
         batch = next(train_dataloader)
         latents, encoded_text, prompt_embeds, noise, bsz = sample_batch(batch, accelerator, vae,
                                                                         compute_embeddings_fn, weight_dtype)
-        w_embedding, w_embedding_fake, w = sample_w(args, len(latents), latents)
 
-        generator_fn = multiboundary_cd_loss if args.task_type == 'baseline_dmd2' else multiboundary_cd_loss
+        generator_fn = multiboundary_cd_loss if args.task_type == 'multi_cd' else cd_loss
         loss = generator_fn(
                         args, accelerator, latents, noise,
                         prompt_embeds, uncond_prompt_embeds, encoded_text,
                         unet, teacher_unet,
-                        solver, w, w_embedding,
+                        solver, args.w,
                         noise_scheduler, optimizer, lr_scheduler,
-                        weight_dtype, global_step,
+                        weight_dtype,
             )
         # ----------------------------------------------------
 
@@ -150,7 +148,7 @@ def train(args):
 
         logs = {
             "lr": lr_scheduler.get_last_lr()[0],
-            "fake_diffusion_loss": loss.detach().item(),
+            "loss": loss.detach().item(),
         }
         progress_bar.set_postfix(**logs)
         accelerator.log(logs, step=global_step)
@@ -164,8 +162,7 @@ def train(args):
     if accelerator.is_main_process:
         unet = accelerator.unwrap_model(unet)
         unet.save_pretrained(args.output_dir)
-        lora_state_dict = get_peft_model_state_dict(unet, adapter_name="default")
-        StableDiffusionPipeline.save_lora_weights(os.path.join(args.output_dir, "unet_lora"), lora_state_dict)
+        #torch.save(unet.state_dict(), f'{args.output_dir}/model_weights.pth')
 
     accelerator.end_training()
 
@@ -195,27 +192,6 @@ def sample_batch(batch, accelerators, vae, compute_embeddings_fn, weight_dtype):
     bsz = latents.shape[0]
 
     return latents, encoded_text, prompt_embeds, noise, bsz
-# ---------------------------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------------------------
-def sample_w(args, bsz, latents):
-    w_list = [int(x) for x in args.w_list.split(",")]
-    w = torch.tensor(random.choices(w_list, k=bsz))
-    if args.embed_guidance:
-        w_embedding = guidance_scale_embedding(w, embedding_dim=512)
-        w_embedding = w_embedding.to(device=latents.device, dtype=latents.dtype)
-    else:
-        w_embedding = None
-    w = w.reshape(bsz, 1, 1, 1)
-    w = w.to(device=latents.device, dtype=latents.dtype)
-    if args.task_type == 'baseline_dmd2':
-        w_fake = torch.tensor(random.choices([int(x) for x in args.w_list_fake.split(",")], k=bsz))
-        w_embedding_fake = guidance_scale_embedding(w_fake, embedding_dim=512)
-        w_embedding_fake = w_embedding_fake.to(device=latents.device, dtype=latents.dtype)
-    else:
-        w_embedding_fake = w_embedding
-    return w_embedding, w_embedding_fake, w
 # ---------------------------------------------------------------------------------------------
 
 
@@ -268,28 +244,6 @@ def prepare_models(args, accelerator):
     unet.load_state_dict(torch.load(args.teacher_checkpoint))
     unet.train()
 
-    # 8. Add LoRA to the student U-Net, only the LoRA projection matrix will be updated by the optimizer.
-    modules = ["to_q",
-               "to_k",
-               "to_v",
-               "to_out.0",
-               "proj_in",
-               "proj_out",
-               "ff.net.0.proj",
-               "ff.net.2",
-               "conv1",
-               "conv2",
-               "conv_shortcut",
-               "downsamplers.0.conv",
-               "upsamplers.0.conv",
-               "time_emb_proj"]
-
-    lora_config = LoraConfig(
-            r=args.lora_rank,
-            target_modules=modules,
-        )
-    unet = get_peft_model(unet, lora_config)
-
     # 9. Cast to weight type and move to device
     weight_dtype = torch.float32
     if accelerator.mixed_precision == "fp16":
@@ -298,8 +252,6 @@ def prepare_models(args, accelerator):
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device)
-    if args.pretrained_vae_model_name_or_path is not None:
-        vae.to(dtype=weight_dtype)
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     unet.to(accelerator.device)
 

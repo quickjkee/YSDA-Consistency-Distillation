@@ -22,7 +22,7 @@ def get_coco_loader(args, batch_size=50, is_train=False, max_cnt=None):
         ]
     )
     dataset = COCODataset(
-        'data',
+        args.train_path,
         subset_name="train2014" if is_train else "val2014",
         transform=transform,
         max_cnt=max_cnt,
