@@ -21,4 +21,4 @@ accelerate launch --config_file $ACCELERATE_CONFIG --num_processes=1 --main_proc
     --gradient_accumulation_steps=1 \
     --report_to=tensorboard \
     --seed=453645634 \
-    --num_ddim_timesteps 50 \
+    --num_ddim_timesteps 50

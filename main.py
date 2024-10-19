@@ -6,7 +6,6 @@ from train import train
 # -------------------------------------------------------------------------------------------------
 def parse_args():
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
-    # ----------Model Checkpoint Loading Arguments----------
     parser.add_argument(
         "--pretrained_teacher_model",
         type=str,
@@ -46,8 +45,6 @@ def parse_args():
             ' (default), `"wandb"` and `"comet_ml"`. Use `"all"` to report to all integrations.'
         ),
     )
-    # ----Checkpointing----
-    # ----Image Processing----
     parser.add_argument(
         "--resolution",
         type=int,
@@ -57,7 +54,6 @@ def parse_args():
             " resolution"
         ),
     )
-    # ----Batch Size and Training Steps----
     parser.add_argument(
         "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
     )
@@ -68,7 +64,6 @@ def parse_args():
         default=None,
         help="Total number of training steps to perform.  If provided, overrides num_train_epochs.",
     )
-    # ----Learning Rate----
     parser.add_argument(
         "--learning_rate",
         type=float,
@@ -93,13 +88,11 @@ def parse_args():
         default=1,
         help="Number of updates steps to accumulate before performing a backward/update pass.",
     )
-    # ----Optimizer (Adam)----
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
     parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    # ----Distillation Specific Arguments----
     parser.add_argument(
         "--num_ddim_timesteps",
         type=int,
@@ -119,7 +112,6 @@ def parse_args():
         default=0.001,
         help="The huber loss parameter. Only used if `--loss_type=huber`.",
     )
-    # ----Mixed Precision----
     parser.add_argument(
         "--mixed_precision",
         type=str,
@@ -131,21 +123,18 @@ def parse_args():
             " flag passed with the `accelerate.launch` command. Use this argument to override the accelerate config."
         ),
     )
-    # ----Training Optimizations----
     parser.add_argument(
         "--gradient_checkpointing",
         action="store_true",
         help="Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass.",
     )
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
-    # ----------Validation Arguments----------
     parser.add_argument(
         "--validation_steps",
         type=int,
         default=200,
         help="Run validation every X steps.",
     )
-    # ----------Accelerate Arguments----------
     parser.add_argument(
         "--tracker_project_name",
         type=str,
