@@ -6,6 +6,7 @@ accelerate launch --config_file $ACCELERATE_CONFIG --num_processes=1 --main_proc
     --output_dir="results" \
     --train_path="data" \
     --task_type='multi_cd' \
+    --num_boundaries=4 \
     --mixed_precision=fp16 \
     --resolution=512 \
     --w=8 \
