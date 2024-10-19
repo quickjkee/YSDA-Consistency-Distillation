@@ -1,7 +1,6 @@
 import copy
 import functools
 import logging
-import math
 import os
 import torch
 import torch.utils.checkpoint
