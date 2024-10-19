@@ -19,12 +19,12 @@ def parse_args():
         type=str,
         default='data',
         required=True,
-        help="Path to trainn data",
+        help="Path to train data",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="lcm-xl-distilled",
+        default="cd-xl-distilled",
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
@@ -164,10 +164,6 @@ def parse_args():
         "--num_endpoints",
         type=int,
         default=4,
-    )
-    parser.add_argument(
-        "--ctm_mode",
-        action="store_true"
     )
     parser.add_argument(
         "--task_type",

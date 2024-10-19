@@ -3,15 +3,10 @@ import functools
 import logging
 import math
 import os
-import random
-import shutil
 import torch
 import torch.utils.checkpoint
 import transformers
 import diffusers
-import yaml
-import types
-import torch.distributed as dist
 
 from accelerate import Accelerator
 from accelerate.logging import get_logger

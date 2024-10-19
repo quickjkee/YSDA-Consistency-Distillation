@@ -3,7 +3,6 @@ import torch
 
 from diffusers import StableDiffusionPipeline
 from accelerate.logging import get_logger
-from utils import guidance_scale_embedding
 
 MAX_SEQ_LENGTH = 77
 logger = get_logger(__name__)
@@ -187,20 +186,9 @@ def sample_deterministic(
         latents = latents.to(prompt_embeds.dtype)
 
     for i, (t, s) in enumerate(zip(timesteps, boundary_timesteps)):
-
-        if args.embed_guidance:
-            if w_guidance is None:
-                w_guidance = args.w_min
-            w = torch.tensor([w_guidance] * len(latents))
-            w_embedding = guidance_scale_embedding(w, embedding_dim=512)
-            w_embedding = w_embedding.to(device=latents.device, dtype=latents.dtype)
-        else:
-            w_embedding = None
-
         noise_pred = unet(
             latents,
             t,
-            timestep_cond=w_embedding,
             encoder_hidden_states=prompt_embeds,
             cross_attention_kwargs=None,
             return_dict=False,

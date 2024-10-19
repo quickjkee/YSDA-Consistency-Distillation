@@ -77,23 +77,14 @@ def log_validation(vae, unet, args, accelerator, weight_dtype, step, w_guidance=
 
     for j, prompt in enumerate(validation_prompts):
         with torch.autocast("cuda", dtype=weight_dtype):
-            if args.ctm_mode or args.num_endpoints > 1:
-                images = sample_deterministic(
+            images = sample_deterministic(
                     pipeline,
                     [prompt] * 4,
                     args=args, unets=unet,
                     num_inference_steps=args.num_endpoints,
                     generator=generator,
                     w_guidance=w_guidance,
-                )
-            else:
-                images = pipeline(
-                    prompt=prompt,
-                    num_inference_steps=4,
-                    num_images_per_prompt=4,
-                    generator=generator,
-                    guidance_scale=w_guidance + 1,
-                ).images
+            )
             for u, image in enumerate(images):
                 image.save(f'{args.output_dir}/{step}_{j}_{u}.jpg')
 
