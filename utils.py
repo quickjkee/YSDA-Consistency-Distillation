@@ -97,7 +97,7 @@ def log_validation(vae, unet, args, accelerator, weight_dtype, step):
                 ).images
             os.makedirs(f'{args.output_dir}/snapshots_{args.task_type}', exist_ok=True)
             for u, image in enumerate(images):
-                image.save(f'{args.output_dir}/snapshots/{step}_{j}_{u}.jpg')
+                image.save(f'{args.output_dir}/snapshots_{args.task_type}/{step}_{j}_{u}.jpg')
 
     del pipeline
     gc.collect()

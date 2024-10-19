@@ -66,7 +66,7 @@ class DDIMSolver:
     def __init__(
             self, alpha_cumprods, timesteps=1000, ddim_timesteps=50,
             num_boundaries=1,
-            num_inverse_endpoints=1,
+            num_inverse_boundaries=1,
             max_inverse_timestep_index=49
     ):
         # DDIM sampling parameters
@@ -92,12 +92,10 @@ class DDIMSolver:
         self.endpoints = torch.tensor([0] + self.ddim_timesteps[endpoint_idxs].tolist())
 
         # Set endpoints for inverse CTM
-        timestep_interval = ddim_timesteps // num_inverse_endpoints + int(ddim_timesteps % num_inverse_endpoints > 0)
+        timestep_interval = ddim_timesteps // num_inverse_boundaries + int(ddim_timesteps % num_inverse_boundaries > 0)
         inverse_endpoint_idxs = torch.arange(timestep_interval, ddim_timesteps, timestep_interval) - 1
         inverse_endpoint_idxs = torch.tensor(inverse_endpoint_idxs.tolist() + [max_inverse_timestep_index])
         self.inverse_endpoints = self.ddim_timesteps[inverse_endpoint_idxs]
-
-        print(f"Endpoints direct CTM: {self.endpoints} | Endpoints inverse CTM: {self.inverse_endpoints}")
 
     def to(self, device):
         self.endpoints = self.endpoints.to(device)
@@ -156,7 +154,7 @@ def sample_deterministic(
         timesteps=pipe.scheduler.num_train_timesteps,
         ddim_timesteps=num_scales,
         num_boundaries=num_inference_steps,
-        num_inverse_endpoints=num_inference_steps,
+        num_inverse_boundaries=num_inference_steps,
         max_inverse_timestep_index=max_inverse_timestep_index
     ).to(device)
 
