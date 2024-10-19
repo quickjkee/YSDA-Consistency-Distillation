@@ -156,12 +156,7 @@ def parse_args():
         ),
     )
     parser.add_argument(
-        "--teacher_checkpoint",
-        type=str,
-        default='',
-    )
-    parser.add_argument(
-        "--num_endpoints",
+        "--num_boundaries",
         type=int,
         default=4,
     )

@@ -65,7 +65,7 @@ def extract_into_tensor(a, t, x_shape):
 class DDIMSolver:
     def __init__(
             self, alpha_cumprods, timesteps=1000, ddim_timesteps=50,
-            num_endpoints=1,
+            num_boundaries=1,
             num_inverse_endpoints=1,
             max_inverse_timestep_index=49
     ):
@@ -87,7 +87,7 @@ class DDIMSolver:
         self.ddim_alpha_cumprods_next = torch.from_numpy(self.ddim_alpha_cumprods_next)
 
         # Set endpoints for direct CTM
-        timestep_interval = ddim_timesteps // num_endpoints + int(ddim_timesteps % num_endpoints > 0)
+        timestep_interval = ddim_timesteps // num_boundaries + int(ddim_timesteps % num_boundaries > 0)
         endpoint_idxs = torch.arange(timestep_interval, ddim_timesteps, timestep_interval) - 1
         self.endpoints = torch.tensor([0] + self.ddim_timesteps[endpoint_idxs].tolist())
 
@@ -123,7 +123,6 @@ class DDIMSolver:
 def sample_deterministic(
         pipe,
         prompt,
-        args,
         unet,
         latents=None,
         generator=None,
@@ -132,7 +131,6 @@ def sample_deterministic(
         start_timestep=19,
         max_inverse_timestep_index=49,
         return_latent=False,
-        w_guidance=None,
 ):
     assert isinstance(pipe, StableDiffusionPipeline), f"Does not support the pipeline {type(pipe)}"
     height = pipe.unet.config.sample_size * pipe.vae_scale_factor
@@ -157,7 +155,7 @@ def sample_deterministic(
         pipe.scheduler.alphas_cumprod.numpy(),
         timesteps=pipe.scheduler.num_train_timesteps,
         ddim_timesteps=num_scales,
-        num_endpoints=num_inference_steps,
+        num_boundaries=num_inference_steps,
         num_inverse_endpoints=num_inference_steps,
         max_inverse_timestep_index=max_inverse_timestep_index
     ).to(device)

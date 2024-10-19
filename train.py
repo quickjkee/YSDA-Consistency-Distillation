@@ -25,7 +25,7 @@ from pathlib import Path
 
 from utils import encode_prompt
 from solver import DDIMSolver
-from src.eval import log_validation, distributed_sampling, calculate_scores
+from utils import log_validation
 from train_utils import multiboundary_cd_loss, cd_loss
 from dataset import get_coco_loader
 
@@ -45,15 +45,15 @@ def train(args):
     # ----------------------------------------
     unet, teacher_unet, text_encoder, tokenizer, vae, weight_dtype = prepare_models(args, accelerator)
     noise_scheduler = DDPMScheduler.from_pretrained(
-        args.pretrained_teacher_model, subfolder="scheduler", revision=args.teacher_revision
+        args.pretrained_teacher_model, subfolder="scheduler",
     )
 
     solver = DDIMSolver(
         noise_scheduler.alphas_cumprod.numpy(),
         timesteps=noise_scheduler.config.num_train_timesteps,
         ddim_timesteps=args.num_ddim_timesteps,
-        num_endpoints=args.num_endpoints,
-        num_inverse_endpoints=args.num_endpoints,
+        num_boundaries=args.num_boundaries,
+        num_inverse_boundaries=args.num_boundaries,
     )
     solver = solver.to(accelerator.device)
     # ----------------------------------------
@@ -91,7 +91,7 @@ def train(args):
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
-    logger.info(f"  Num Epochs = {args.num_train_epochs}")
+    logger.info(f"  Num steps = {args.max_train_steps}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
@@ -134,9 +134,7 @@ def train(args):
         if accelerator.local_process_index == 0:
             with torch.no_grad():
                 if global_step % args.validation_steps == 0:
-                    w_list = [int(x) for x in args.w_list.split(",")]
-                    for w in w_list:
-                        log_validation(vae, unet, args, accelerator, weight_dtype, global_step, w_guidance=w)
+                    log_validation(vae, unet, args, accelerator, weight_dtype, global_step)
 
             progress_bar.update(1)
             global_step += 1
@@ -156,8 +154,7 @@ def train(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         unet = accelerator.unwrap_model(unet)
-        unet.save_pretrained(args.output_dir)
-        #torch.save(unet.state_dict(), f'{args.output_dir}/model_weights.pth')
+        torch.save(unet.state_dict(), f'{args.output_dir}/model_weights.pth')
 
     accelerator.end_training()
 
@@ -167,9 +164,9 @@ def train(args):
 
 
 # ---------------------------------------------------------------------------------------------
-def sample_batch(batch, accelerators, vae, compute_embeddings_fn, weight_dtype):
+def sample_batch(batch, accelerator, vae, compute_embeddings_fn, weight_dtype):
     image, text = batch['image'], batch['text']
-    image = image.to(accelerators[0].device, non_blocking=True)
+    image = image.to(accelerator.device, non_blocking=True)
     encoded_text = compute_embeddings_fn(text)
     pixel_values = image.to(dtype=weight_dtype)
     if vae.dtype != weight_dtype:
@@ -197,7 +194,7 @@ def prepare_models(args, accelerator):
     # ----------------------------------------
     # 2. Load tokenizers from SD1.5 checkpoint.
     tokenizer = AutoTokenizer.from_pretrained(
-        args.pretrained_teacher_model, subfolder="tokenizer", revision=args.teacher_revision, use_fast=False
+        args.pretrained_teacher_model, subfolder="tokenizer", use_fast=False
     )
 
     # 3. Load text encoders from SD-1.5 checkpoint.
@@ -211,12 +208,11 @@ def prepare_models(args, accelerator):
     vae = AutoencoderKL.from_pretrained(
         args.pretrained_teacher_model,
         subfolder="vae",
-        revision=args.teacher_revision,
     )
 
     # 5. Load teacher U-Net from SD1.5 checkpoint
     teacher_unet = UNet2DConditionModel.from_pretrained(
-        args.pretrained_teacher_model, subfolder="unet", revision=args.teacher_revision,
+        args.pretrained_teacher_model, subfolder="unet",
         torch_dtype = torch.float16,
         variant = "fp16"
     )
@@ -231,12 +227,9 @@ def prepare_models(args, accelerator):
     # ----------------------------------------
     # 7. Load student U-net
     unet = UNet2DConditionModel.from_pretrained(
-            args.pretrained_teacher_model, subfolder="unet", revision=args.teacher_revision,
-            time_cond_proj_dim=512, low_cpu_mem_usage=False, device_map=None
+            args.pretrained_teacher_model, subfolder="unet",
         )
     teacher_unet = copy.deepcopy(unet)
-    teacher_unet.load_state_dict(torch.load(args.teacher_checkpoint))
-    unet.load_state_dict(torch.load(args.teacher_checkpoint))
     unet.train()
 
     # 9. Cast to weight type and move to device
@@ -265,22 +258,7 @@ def prepare_models(args, accelerator):
 def prepare_data(args, accelerator, tokenizer, text_encoder):
     train_dataloader = get_coco_loader(args, batch_size=args.train_batch_size, is_train=True)
 
-    # Scheduler and math around the number of training steps.
-    overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        overrode_max_train_steps = True
-
-    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if overrode_max_train_steps:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-    # Afterwards we recalculate our number of training epochs
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
-
     # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
         tracker_config = dict(vars(args))
         accelerator.init_trackers(args.tracker_project_name, config=tracker_config)

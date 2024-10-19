@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 import random
@@ -38,14 +39,15 @@ def encode_prompt(prompt_batch, text_encoder, tokenizer, proportion_empty_prompt
 
 @torch.no_grad()
 # ---------------------------------------------------------------------
-def log_validation(vae, unet, args, accelerator, weight_dtype, step, w_guidance=None):
+def log_validation(vae, unet, args, accelerator, weight_dtype, step):
     logger.info("Running validation... ")
 
+    unet = accelerator.unwrap_model(unet)
     pipeline = StableDiffusionPipeline.from_pretrained(
            args.pretrained_teacher_model,
-           vae=vae, unet=copy.deepcopy(unet).eval(),
+           vae=vae,
+           unet=copy.deepcopy(unet).eval(),
            scheduler=LCMScheduler.from_pretrained(args.pretrained_teacher_model, subfolder="scheduler"),
-           revision=args.revision,
            torch_dtype=weight_dtype,
            safety_checker=None,
         )
@@ -77,16 +79,25 @@ def log_validation(vae, unet, args, accelerator, weight_dtype, step, w_guidance=
 
     for j, prompt in enumerate(validation_prompts):
         with torch.autocast("cuda", dtype=weight_dtype):
-            images = sample_deterministic(
+            if args.task_type == 'multi_cd':
+                images = sample_deterministic(
                     pipeline,
                     [prompt] * 4,
-                    args=args, unets=unet,
-                    num_inference_steps=args.num_endpoints,
+                    unet=unet,
+                    num_inference_steps=args.num_boundaries,
                     generator=generator,
-                    w_guidance=w_guidance,
-            )
+                )
+            else:
+                images = pipeline(
+                    prompt=prompt,
+                    num_inference_steps=4,
+                    num_images_per_prompt=4,
+                    generator=generator,
+                    guidance_scale=0.0,
+                ).images
+            os.makedirs(f'{args.output_dir}/snapshots_{args.task_type}', exist_ok=True)
             for u, image in enumerate(images):
-                image.save(f'{args.output_dir}/{step}_{j}_{u}.jpg')
+                image.save(f'{args.output_dir}/snapshots/{step}_{j}_{u}.jpg')
 
     del pipeline
     gc.collect()
