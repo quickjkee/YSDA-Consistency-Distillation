@@ -154,7 +154,7 @@ def train(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         unet = accelerator.unwrap_model(unet)
-        torch.save(unet.state_dict(), f'{args.output_dir}/model_weights.pth')
+        torch.save(unet.state_dict(), f'{args.output_dir}/model_weights_{args.task_type}.pth')
 
     accelerator.end_training()
 
