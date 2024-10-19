@@ -153,11 +153,13 @@ def parse_args():
         "--task_type",
         type=str,
         default=None,
+        help="multi_cd or cd",
     )
     parser.add_argument(
         "--w",
         type=int,
         default=8,
+        help="classifier free guidance scale",
     )
 
     args = parser.parse_args()
