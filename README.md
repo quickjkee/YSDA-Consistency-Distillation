@@ -33,7 +33,7 @@ we've prepared the distilled model checkpoints (multi boundary version)
 . data/download_checkpoint_4steps.sh
 ```
 
-### 3.2 Go the training ```run_inference.ipynb``` and play!
+### 3.2 Go to the ```run_inference.ipynb``` and play!
 We expect something like:
 <p align="center">
 <img src="stuff/imgs.jpg" width="1080px"/>
