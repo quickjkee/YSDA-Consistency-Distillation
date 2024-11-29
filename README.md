@@ -9,7 +9,7 @@ conda activate cd-train
 pip3 install -r requirements.txt
 ```
 
-If you have enough computational resources (one GPU with 16 GiB is enough) for training, do the following:
+If you have enough computational resources (one GPU with 32 GiB is enough) for training, do the following:
 
 ### 2.1 Download the data (12 GB)
 
